@@ -1,10 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const supabase = require('./supabase');
 
 const app = express();
-const PORT = 3001;
 
 // Middleware
 app.use(cors());
@@ -380,7 +380,8 @@ app.get('/api/estadisticas/todos-vehiculos', async (req, res) => {
 
 // ==================== SERVIDOR ====================
 
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
   console.log(`✅ Conectado a Supabase`);
   console.log(`\n📋 Credenciales de prueba:`);
