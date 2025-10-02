@@ -7,7 +7,13 @@ const supabase = require('./supabase');
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://sistema-combustible-frontend.onrender.com'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // ==================== RUTAS DE AUTENTICACIÓN ====================
