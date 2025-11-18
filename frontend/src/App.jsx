@@ -3,7 +3,7 @@ import axios from 'axios';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_URL = 'https://sistema-combustible-2025.onrender.com/api';
-const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'OTRAS'];
+const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'PUMA', 'OTRAS'];const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'OTRAS'];
 
 // URLs de imágenes de los vehículos (puedes reemplazarlas con tus propias imágenes)
 const VEHICLE_IMAGES = {
