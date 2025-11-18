@@ -2,11 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const compression = require('compression');
 const supabase = require('./supabase');
 
 const app = express();
 
-// Middleware
+// Middleware de compresión
+app.use(compression());
+
+// Middleware CORS
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -14,9 +18,44 @@ app.use(cors({
   ],
   credentials: true
 }));
+
 app.use(express.json());
 
+// Caché simple en memoria
+const cache = new Map();
+const CACHE_DURATION = 60000; // 1 minuto
+
+function setCache(key, data) {
+  cache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+}
+
+function getCache(key) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  
+  if (Date.now() - cached.timestamp > CACHE_DURATION) {
+    cache.delete(key);
+    return null;
+  }
+  
+  return cached.data;
+}
+
+function invalidateCache(pattern) {
+  for (const [key] of cache) {
+    if (key.includes(pattern)) {
+      cache.delete(key);
+    }
+  }
+}
+
 // ==================== RUTAS DE AUTENTICACIÓN ====================
+
+// ✅ COPIAR ESTO Y REEMPLAZAR LA FUNCIÓN app.post('/api/login', ...)
+// EN TU ARCHIVO backend/server.js (línea ~57)
 
 app.post('/api/login', async (req, res) => {
   try {
@@ -36,13 +75,14 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    const passwordValido = true; // TEMPORAL - deja entrar a cualquiera
-    
+    // ✅ NUEVO: Verificar contraseña con bcrypt contra el hash en Supabase
+    const passwordValido = await bcrypt.compare(password, usuario.password_hash);
+
     if (!passwordValido) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    const { password: _, ...usuarioSinPassword } = usuario;
+    const { password_hash: _, ...usuarioSinPassword } = usuario;
     
     res.json({
       success: true,
@@ -56,11 +96,19 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/usuarios', async (req, res) => {
   try {
+    // Intentar obtener del caché
+    const cached = getCache('usuarios');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data, error } = await supabase
       .from('usuarios')
       .select('id, username, nombre, created_at');
     
     if (error) throw error;
+    
+    setCache('usuarios', data);
     res.json(data);
   } catch (error) {
     console.error('Error obteniendo usuarios:', error);
@@ -72,12 +120,20 @@ app.get('/api/usuarios', async (req, res) => {
 
 app.get('/api/vehiculos', async (req, res) => {
   try {
+    // Intentar obtener del caché
+    const cached = getCache('vehiculos');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data, error } = await supabase
       .from('vehiculos')
       .select('*')
       .order('nombre');
     
     if (error) throw error;
+    
+    setCache('vehiculos', data);
     res.json(data);
   } catch (error) {
     console.error('Error obteniendo vehículos:', error);
@@ -151,6 +207,10 @@ app.post('/api/registros', async (req, res) => {
     
     if (error) throw error;
     
+    // Invalidar caché
+    invalidateCache('estadisticas');
+    invalidateCache('registros');
+    
     res.status(201).json({
       success: true,
       id: data[0].id,
@@ -166,6 +226,13 @@ app.get('/api/registros', async (req, res) => {
   try {
     const { vehiculo_id, limit } = req.query;
     
+    // Crear clave de caché única
+    const cacheKey = `registros_${vehiculo_id || 'all'}_${limit || 'all'}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     let query = supabase
       .from('registros_combustible')
       .select(`
@@ -195,6 +262,7 @@ app.get('/api/registros', async (req, res) => {
       usuario_nombre: r.usuarios.nombre
     }));
     
+    setCache(cacheKey, registros);
     res.json(registros);
   } catch (error) {
     console.error('Error obteniendo registros:', error);
@@ -243,6 +311,9 @@ app.put('/api/registros/:id', async (req, res) => {
       throw error;
     }
 
+    invalidateCache('estadisticas');
+    invalidateCache('registros');
+
     res.json({ message: 'Registro actualizado exitosamente', data });
   } catch (error) {
     console.error('Error actualizando registro:', error);
@@ -264,6 +335,9 @@ app.delete('/api/registros/:id', async (req, res) => {
       console.error('Error de Supabase:', error);
       throw error;
     }
+
+    invalidateCache('estadisticas');
+    invalidateCache('registros');
 
     res.json({ message: 'Registro eliminado exitosamente' });
   } catch (error) {
@@ -296,6 +370,12 @@ app.get('/api/vehiculos/:id/ultimo-kilometraje', async (req, res) => {
 
 app.get('/api/estadisticas/vehiculo/:id', async (req, res) => {
   try {
+    const cacheKey = `estadisticas_vehiculo_${req.params.id}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data, error } = await supabase
       .from('registros_combustible')
       .select('*')
@@ -315,6 +395,7 @@ app.get('/api/estadisticas/vehiculo/:id', async (req, res) => {
       ultima_carga: data.length > 0 ? data[0].fecha : null
     };
     
+    setCache(cacheKey, stats);
     res.json(stats);
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
@@ -324,6 +405,11 @@ app.get('/api/estadisticas/vehiculo/:id', async (req, res) => {
 
 app.get('/api/estadisticas/generales', async (req, res) => {
   try {
+    const cached = getCache('estadisticas_generales');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data, error } = await supabase
       .from('registros_combustible')
       .select('*');
@@ -340,6 +426,7 @@ app.get('/api/estadisticas/generales', async (req, res) => {
       promedio_km_galon: data.length > 0 ? data.reduce((sum, r) => sum + r.km_por_galon, 0) / data.length : 0
     };
     
+    setCache('estadisticas_generales', stats);
     res.json(stats);
   } catch (error) {
     console.error('Error obteniendo estadísticas generales:', error);
@@ -349,6 +436,11 @@ app.get('/api/estadisticas/generales', async (req, res) => {
 
 app.get('/api/estadisticas/todos-vehiculos', async (req, res) => {
   try {
+    const cached = getCache('estadisticas_todos_vehiculos');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data: vehiculos, error: errorVehiculos } = await supabase
       .from('vehiculos')
       .select('*');
@@ -377,6 +469,7 @@ app.get('/api/estadisticas/todos-vehiculos', async (req, res) => {
       };
     }));
     
+    setCache('estadisticas_todos_vehiculos', estadisticas);
     res.json(estadisticas);
   } catch (error) {
     console.error('Error obteniendo estadísticas de todos los vehículos:', error);
