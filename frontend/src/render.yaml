@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: sistema-combustible-frontend
+    dir: control-combustible/frontend
+    buildCommand: npm ci && CI=false npm run build
+    startCommand: npm run preview
+    publishDirectory: dist
+    envVars:
+      - key: NODE_ENV
+        value: production
