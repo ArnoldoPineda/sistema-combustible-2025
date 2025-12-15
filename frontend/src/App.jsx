@@ -3,7 +3,7 @@ import axios from 'axios';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_URL = 'https://sistema-combustible-2025.onrender.com/api';
-const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'PUMA', 'OTRAS'];const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'OTRAS'];
+const GASOLINERAS = ['UNO', 'TEXACO', 'SHELL', 'PUMA', 'OTRAS'];
 
 // URLs de imágenes de los vehículos (puedes reemplazarlas con tus propias imágenes)
 const VEHICLE_IMAGES = {
@@ -14,8 +14,15 @@ const VEHICLE_IMAGES = {
 
 const COLORS = ['#667eea', '#764ba2', '#f093fb', '#4facfe'];
 
+// Usuario por defecto - sin necesidad de login
+const USUARIO_DEFECTO = {
+  id: 1,
+  nombre: 'Usuario',
+  username: 'usuario'
+};
+
 function App() {
-  const [usuario, setUsuario] = useState(null);
+  const [usuario, setUsuario] = useState(USUARIO_DEFECTO);
   const [tabActiva, setTabActiva] = useState('capturador');
   const [vehiculos, setVehiculos] = useState([]);
   const [registros, setRegistros] = useState([]);
@@ -38,12 +45,11 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (usuario) {
-      cargarVehiculos();
-      cargarRegistros();
-      cargarEstadisticas();
-    }
-  }, [usuario]);
+    // Cargar datos inmediatamente sin esperar login
+    cargarVehiculos();
+    cargarRegistros();
+    cargarEstadisticas();
+  }, []);
 
   const cargarVehiculos = async () => {
     try {
@@ -91,30 +97,6 @@ function App() {
     } catch (error) {
       console.error('Error cargando último kilometraje:', error);
     }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const username = e.target.username.value;
-    const password = e.target.password.value;
-
-    try {
-      const response = await axios.post(`${API_URL}/login`, { username, password });
-      setUsuario(response.data.usuario);
-    } catch (error) {
-      setError(error.response?.data?.error || 'Error al iniciar sesión');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setUsuario(null);
-    setTabActiva('capturador');
-    setVehiculoSeleccionado(null);
   };
 
   const handleInputChange = (e) => {
@@ -226,17 +208,13 @@ function App() {
     };
   };
 
-  if (!usuario) {
-    return <LoginForm onLogin={handleLogin} error={error} loading={loading} />;
-  }
-
   const valores = calcularValores();
   const estadisticasPeriodo = calcularEstadisticasPorPeriodo();
   const esAdmin = usuario.username === 'admin';
 
   return (
     <div className="app-container">
-      <Header usuario={usuario} onLogout={handleLogout} />
+      <Header usuario={usuario} />
       
       <div className="tabs">
         <button 
@@ -305,37 +283,12 @@ function App() {
   );
 }
 
-function LoginForm({ onLogin, error, loading }) {
-  return (
-    <div className="login-container">
-      <div className="login-card">
-        <h1>Control de Combustible</h1>
-        {error && <div className="error-message">{error}</div>}
-        <form onSubmit={onLogin}>
-          <div className="form-group">
-            <label>Usuario</label>
-            <input type="text" name="username" required autoComplete="username" />
-          </div>
-          <div className="form-group">
-            <label>Contraseña</label>
-            <input type="password" name="password" required autoComplete="current-password" />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Header({ usuario, onLogout }) {
+function Header({ usuario }) {
   return (
     <div className="header">
       <h1>Control de Combustible</h1>
       <div className="user-info">
         <span className="user-name">{usuario.nombre}</span>
-        <button onClick={onLogout} className="btn-logout">Salir</button>
       </div>
     </div>
   );
@@ -433,7 +386,6 @@ function CapturadorMejorado({ vehiculos, vehiculoSeleccionado, onSeleccionarVehi
     </div>
   );
 }
-// Agregar este componente mejorado al App.jsx
 
 function DashboardAvanzado({ vehiculos }) {
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState('todos');
@@ -447,7 +399,6 @@ function DashboardAvanzado({ vehiculos }) {
   const cargarEstadisticasCompletas = async () => {
     setLoading(true);
     try {
-      // Cargar TODOS los registros sin límite
       const endpoint = vehiculoSeleccionado === 'todos' 
         ? `${API_URL}/registros?limit=1000`
         : `${API_URL}/registros?vehiculo_id=${vehiculoSeleccionado}&limit=1000`;
@@ -455,7 +406,6 @@ function DashboardAvanzado({ vehiculos }) {
       const response = await axios.get(endpoint);
       const registros = response.data;
 
-      // Calcular estadísticas
       const stats = calcularEstadisticasAvanzadas(registros);
       setEstadisticas(stats);
     } catch (error) {
@@ -470,7 +420,6 @@ function DashboardAvanzado({ vehiculos }) {
     const mesActual = ahora.getMonth();
     const añoActual = ahora.getFullYear();
 
-    // Gastos por año
     const gastosPorAño = {};
     const gastosPorMes = {};
     const costoPorKmTiempo = [];
@@ -481,7 +430,6 @@ function DashboardAvanzado({ vehiculos }) {
       const mes = fecha.getMonth();
       const mesAño = `${año}-${String(mes + 1).padStart(2, '0')}`;
 
-      // Por año
       if (!gastosPorAño[año]) {
         gastosPorAño[año] = { año, total: 0, litros: 0, km: 0, registros: 0 };
       }
@@ -490,7 +438,6 @@ function DashboardAvanzado({ vehiculos }) {
       gastosPorAño[año].km += r.kilometros_recorridos;
       gastosPorAño[año].registros += 1;
 
-      // Por mes
       if (!gastosPorMes[mesAño]) {
         gastosPorMes[mesAño] = { mesAño, total: 0, litros: 0, km: 0, registros: 0 };
       }
@@ -499,7 +446,6 @@ function DashboardAvanzado({ vehiculos }) {
       gastosPorMes[mesAño].km += r.kilometros_recorridos;
       gastosPorMes[mesAño].registros += 1;
 
-      // Costo por km en el tiempo
       costoPorKmTiempo.push({
         fecha: r.fecha,
         costoPorKm: r.costo_por_km,
@@ -507,18 +453,14 @@ function DashboardAvanzado({ vehiculos }) {
       });
     });
 
-    // Convertir a arrays y ordenar
     const arrayGastosPorAño = Object.values(gastosPorAño).sort((a, b) => a.año - b.año);
     const arrayGastosPorMes = Object.values(gastosPorMes).sort((a, b) => a.mesAño.localeCompare(b.mesAño));
 
-    // Estadísticas del mes actual
     const mesActualKey = `${añoActual}-${String(mesActual + 1).padStart(2, '0')}`;
     const statsMesActual = gastosPorMes[mesActualKey] || { total: 0, litros: 0, registros: 0 };
 
-    // Estadísticas del año actual
     const statsAñoActual = gastosPorAño[añoActual] || { total: 0, litros: 0, km: 0, registros: 0 };
 
-    // Totales históricos
     const totales = registros.reduce((acc, r) => ({
       total: acc.total + r.pago_total,
       litros: acc.litros + r.litros,
@@ -531,8 +473,8 @@ function DashboardAvanzado({ vehiculos }) {
       añoActual: statsAñoActual,
       totales,
       gastosPorAño: arrayGastosPorAño,
-      gastosPorMes: arrayGastosPorMes.slice(-12), // Últimos 12 meses
-      costoPorKmTiempo: costoPorKmTiempo.slice(-50), // Últimos 50 registros
+      gastosPorMes: arrayGastosPorMes.slice(-12),
+      costoPorKmTiempo: costoPorKmTiempo.slice(-50),
       promedioKmLitro: totales.km / totales.litros,
       promedioCostoPorKm: totales.total / totales.km
     };
@@ -550,7 +492,6 @@ function DashboardAvanzado({ vehiculos }) {
 
   return (
     <div>
-      {/* Selector de Vehículo */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Seleccionar Vista</h2>
         <div className="form-group">
@@ -567,7 +508,6 @@ function DashboardAvanzado({ vehiculos }) {
         </div>
       </div>
 
-      {/* Resumen de Gastos */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Gastos de Combustible</h2>
         <div className="periodo-stats">
@@ -601,7 +541,6 @@ function DashboardAvanzado({ vehiculos }) {
         </div>
       </div>
 
-      {/* Gráfica de Gasto Acumulado por Año */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Gasto Acumulado por Año</h2>
         <ResponsiveContainer width="100%" height={300}>
@@ -616,7 +555,6 @@ function DashboardAvanzado({ vehiculos }) {
           </BarChart>
         </ResponsiveContainer>
         
-        {/* Tabla de detalle por año */}
         <div style={{marginTop: '20px', overflowX: 'auto'}}>
           <table style={{width: '100%', borderCollapse: 'collapse'}}>
             <thead>
@@ -651,7 +589,6 @@ function DashboardAvanzado({ vehiculos }) {
         </div>
       </div>
 
-      {/* Gráfica de Gastos por Mes (últimos 12 meses) */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Gastos Mensuales (Últimos 12 Meses)</h2>
         <ResponsiveContainer width="100%" height={300}>
@@ -677,7 +614,6 @@ function DashboardAvanzado({ vehiculos }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Gráfica de Costo por Kilómetro en el Tiempo */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Costo por Kilómetro en el Tiempo</h2>
         <ResponsiveContainer width="100%" height={300}>
@@ -698,7 +634,6 @@ function DashboardAvanzado({ vehiculos }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Gráfica de Rendimiento (Km/Litro) en el Tiempo */}
       <div className="content-card" style={{marginBottom: '20px'}}>
         <h2>Rendimiento (Km/Litro) en el Tiempo</h2>
         <ResponsiveContainer width="100%" height={300}>
@@ -719,7 +654,6 @@ function DashboardAvanzado({ vehiculos }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Resumen de Promedios */}
       <div className="content-card">
         <h2>Promedios Históricos</h2>
         <div className="dashboard-grid">
@@ -909,7 +843,6 @@ function Administracion({ registros, vehiculos, onRecargar }) {
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
 
-      {/* Filtros */}
       <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '20px'}}>
         <div className="form-group">
           <label>Filtrar por Vehículo</label>
@@ -933,7 +866,6 @@ function Administracion({ registros, vehiculos, onRecargar }) {
         Total de registros: <strong>{registrosFiltrados.length}</strong>
       </p>
 
-      {/* Tabla de registros */}
       <div style={{overflowX: 'auto'}}>
         <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '14px'}}>
           <thead>
